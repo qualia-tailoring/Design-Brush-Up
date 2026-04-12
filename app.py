@@ -11,12 +11,16 @@ import anthropic
 import openai
 
 # ── クライアント初期化 ────────────────────────────────────
-anthropic_client = anthropic.Anthropic(
-    api_key=os.environ.get("ANTHROPIC_API_KEY", st.secrets.get("ANTHROPIC_API_KEY", ""))
-)
-openai_client = openai.OpenAI(
-    api_key=os.environ.get("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY", ""))
-)
+try:
+    anthropic_key = st.secrets["ANTHROPIC_API_KEY"]
+    openai_key    = st.secrets["OPENAI_API_KEY"]
+except Exception:
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    openai_key    = os.environ.get("OPENAI_API_KEY", "")
+
+anthropic_client = anthropic.Anthropic(api_key=anthropic_key)
+openai_client    = openai.OpenAI(api_key=openai_key)
+
 
 # ── Prompts ───────────────────────────────────────────────
 ANALYZE_SYSTEM = """You are a fashion design AI assistant for Maison Qualia.
