@@ -10,9 +10,6 @@ from PIL import Image
 import openai
 
 # ── クライアント初期化 ────────────────────────────────────
-anthropic_client = anthropic.Anthropic(
-    api_key=os.environ.get("ANTHROPIC_API_KEY", st.secrets.get("ANTHROPIC_API_KEY", ""))
-)
 openai_client = openai.OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY", ""))
 )
