@@ -11,16 +11,12 @@ import anthropic
 import openai
 
 # ── クライアント初期化 ────────────────────────────────────
-try:
-    anthropic_key = st.secrets["ANTHROPIC_API_KEY"]
-    openai_key    = st.secrets["OPENAI_API_KEY"]
-except Exception:
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    openai_key    = os.environ.get("OPENAI_API_KEY", "")
-
-anthropic_client = anthropic.Anthropic(api_key=anthropic_key)
-openai_client    = openai.OpenAI(api_key=openai_key)
-
+anthropic_client = anthropic.Anthropic(
+    api_key=os.environ.get("ANTHROPIC_API_KEY", st.secrets.get("ANTHROPIC_API_KEY", ""))
+)
+openai_client = openai.OpenAI(
+    api_key=os.environ.get("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY", ""))
+)
 
 # ── Prompts ───────────────────────────────────────────────
 ANALYZE_SYSTEM = """You are a fashion design AI assistant for Maison Qualia.
@@ -49,28 +45,41 @@ def parse_json(text: str) -> dict:
     cleaned = re.sub(r"```json|```", "", text).strip()
     return json.loads(cleaned)
 
-def img_to_base64(img: Image.Image, fmt="PNG") -> tuple[str, str]:
-    img.thumbnail((1024, 1024))
+def img_to_base64(img: Image.Image) -> tuple[str, str]:
+    if img.mode in ("RGBA", "P", "LA"):
+        img = img.convert("RGB")
+    # サイズを小さめに抑えてAPIタイムアウトを防ぐ
+    img.thumbnail((768, 768))
     buf = io.BytesIO()
-    img.save(buf, format=fmt)
-    media = "image/png" if fmt == "PNG" else "image/jpeg"
-    return base64.b64encode(buf.getvalue()).decode(), media
+    img.save(buf, format="JPEG", quality=75)
+    # 500KB超えたらさらに圧縮
+    if buf.tell() > 500_000:
+        buf = io.BytesIO()
+        img.thumbnail((512, 512))
+        img.save(buf, format="JPEG", quality=60)
+    return base64.b64encode(buf.getvalue()).decode(), "image/jpeg"
 
 def analyze_image(img: Image.Image) -> dict:
     b64, media = img_to_base64(img)
-    msg = anthropic_client.messages.create(
-        model="claude-opus-4-5",
-        max_tokens=1000,
-        system=ANALYZE_SYSTEM,
-        messages=[{
-            "role": "user",
-            "content": [
-                {"type": "image", "source": {"type": "base64", "media_type": media, "data": b64}},
-                {"type": "text", "text": "Analyze this image."}
-            ]
-        }]
-    )
-    return parse_json(msg.content[0].text)
+    for attempt in range(3):
+        try:
+            msg = anthropic_client.messages.create(
+                model="claude-opus-4-5",
+                max_tokens=1000,
+                system=ANALYZE_SYSTEM,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "source": {"type": "base64", "media_type": media, "data": b64}},
+                        {"type": "text", "text": "Analyze this image."}
+                    ]
+                }]
+            )
+            return parse_json(msg.content[0].text)
+        except anthropic.InternalServerError:
+            if attempt == 2:
+                raise
+            import time; time.sleep(2)
 
 def refine_prompt(instruction: str, analysis: dict) -> dict:
     msg = anthropic_client.messages.create(
@@ -132,7 +141,9 @@ if "analysis" not in st.session_state:
 if not st.session_state.history:
     uploaded = st.file_uploader("デザイン画をアップロード", type=["png","jpg","jpeg","webp"])
     if uploaded:
-        img = Image.open(uploaded).convert("RGB")
+        img = Image.open(uploaded)
+        if img.mode in ("RGBA", "P", "LA"):
+            img = img.convert("RGB")
         with st.spinner("デザイン画を解析中..."):
             result = analyze_image(img)
 
