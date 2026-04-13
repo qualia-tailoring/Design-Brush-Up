@@ -48,50 +48,48 @@ def parse_json(text: str) -> dict:
 def img_to_base64(img: Image.Image) -> tuple[str, str]:
     if img.mode in ("RGBA", "P", "LA"):
         img = img.convert("RGB")
-    # サイズを小さめに抑えてAPIタイムアウトを防ぐ
-    img.thumbnail((768, 768))
+    img.thumbnail((1024, 1024))
     buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=75)
-    # 500KB超えたらさらに圧縮
-    if buf.tell() > 500_000:
-        buf = io.BytesIO()
-        img.thumbnail((512, 512))
-        img.save(buf, format="JPEG", quality=60)
+    img.save(buf, format="JPEG", quality=90)
     return base64.b64encode(buf.getvalue()).decode(), "image/jpeg"
 
 def analyze_image(img: Image.Image) -> dict:
     b64, media = img_to_base64(img)
     for attempt in range(3):
         try:
-            msg = anthropic_client.messages.create(
-                model="claude-opus-4-5",
+            msg = openai_client.chat.completions.create(
+                model="gpt-4o",
                 max_tokens=1000,
-                system=ANALYZE_SYSTEM,
                 messages=[{
+                    "role": "system",
+                    "content": ANALYZE_SYSTEM
+                }, {
                     "role": "user",
                     "content": [
-                        {"type": "image", "source": {"type": "base64", "media_type": media, "data": b64}},
+                        {"type": "image_url", "image_url": {"url": f"data:{media};base64,{b64}"}},
                         {"type": "text", "text": "Analyze this image."}
                     ]
                 }]
             )
-            return parse_json(msg.content[0].text)
-        except anthropic.InternalServerError:
+            return parse_json(msg.choices[0].message.content)
+        except openai.InternalServerError:
             if attempt == 2:
                 raise
             import time; time.sleep(2)
 
 def refine_prompt(instruction: str, analysis: dict) -> dict:
-    msg = anthropic_client.messages.create(
-        model="claude-opus-4-5",
+    msg = openai_client.chat.completions.create(
+        model="gpt-4o",
         max_tokens=1000,
-        system=REFINE_SYSTEM,
         messages=[{
+            "role": "system",
+            "content": REFINE_SYSTEM
+        }, {
             "role": "user",
             "content": f"Design context: {json.dumps(analysis)}\nUser instruction: {instruction}"
         }]
     )
-    return parse_json(msg.content[0].text)
+    return parse_json(msg.choices[0].message.content)
 
 def generate_image(prompt: str) -> Image.Image:
     response = openai_client.images.generate(
@@ -139,7 +137,7 @@ if "analysis" not in st.session_state:
 
 # ── アップロード ──────────────────────────────────────────
 if not st.session_state.history:
-    uploaded = st.file_uploader("デザイン画をアップロード", type=["png","jpg","jpeg","webp"])
+    uploaded = st.file_uploader("デザイン画をアップロード", type=["png","jpg","jpeg","webp","heic","heif"])
     if uploaded:
         img = Image.open(uploaded)
         if img.mode in ("RGBA", "P", "LA"):
