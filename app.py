@@ -29,7 +29,16 @@ If the image is clearly not fashion-related (food, documents, screenshots), set 
 
 REFINE_SYSTEM = """You are a fashion design prompt engineer for Maison Qualia.
 Convert user instructions into an optimized DALL-E 3 prompt.
-Output style must always be: fashion illustration, flat vector, clean line art, minimal color palette, editorial fashion sketch, white background.
+
+Output style must always follow this exact visual standard:
+- Fashion illustration showing BOTH front bodice view (with female figure) AND back bodice view (flat/technical) side by side
+- Stylish editorial sketch style: loose expressive line art with selective watercolor or marker color fills
+- Fine crosshatching and hatching for fabric texture and volume
+- Bold confident outlines with delicate interior detail lines
+- Color swatches shown between the two views
+- White background, high contrast, fashion week presentation quality
+- NOT flat vector — expressive, hand-crafted illustrator quality
+
 Respond ONLY in valid JSON (no markdown fences):
 {
   "dallePrompt": "full optimized prompt string",
@@ -161,7 +170,12 @@ if st.session_state.history:
     labels = ["Original"] + [f"Rev.{i}" for i in range(1, len(history))]
     # 履歴セレクター（2件以上ある時だけ表示）
     if len(history) > 1:
-        idx = st.select_slider("バージョン", options=range(len(history)), format_func=lambda i: labels[i])
+        idx = st.select_slider(
+            "バージョン",
+            options=range(len(history)),
+            format_func=lambda i: labels[i],
+            value=len(history) - 1
+        )
     else:
         idx = 0
     active = history[idx]
