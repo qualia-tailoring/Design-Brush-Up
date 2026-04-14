@@ -7,9 +7,13 @@ pip install streamlit anthropic openai pillow
 import io, base64, json, re, os
 import streamlit as st
 from PIL import Image
+import anthropic
 import openai
 
 # ── クライアント初期化 ────────────────────────────────────
+anthropic_client = anthropic.Anthropic(
+    api_key=os.environ.get("ANTHROPIC_API_KEY", st.secrets.get("ANTHROPIC_API_KEY", ""))
+)
 openai_client = openai.OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY", ""))
 )
@@ -158,9 +162,12 @@ if st.session_state.history:
     st.markdown(" ".join(f'<span class="mq-tag">{t}</span>' for t in tags if t), unsafe_allow_html=True)
     st.markdown("")
 
-    # 履歴セレクター
     labels = ["Original"] + [f"Rev.{i}" for i in range(1, len(history))]
-    idx = st.select_slider("バージョン", options=range(len(history)), format_func=lambda i: labels[i])
+    # 履歴セレクター（2件以上ある時だけ表示）
+    if len(history) > 1:
+        idx = st.select_slider("バージョン", options=range(len(history)), format_func=lambda i: labels[i])
+    else:
+        idx = 0
     active = history[idx]
 
     # メイン画像
