@@ -7,13 +7,9 @@ pip install streamlit anthropic openai pillow
 import io, base64, json, re, os
 import streamlit as st
 from PIL import Image
-import anthropic
 import openai
 
 # ── クライアント初期化 ────────────────────────────────────
-anthropic_client = anthropic.Anthropic(
-    api_key=os.environ.get("ANTHROPIC_API_KEY", st.secrets.get("ANTHROPIC_API_KEY", ""))
-)
 openai_client = openai.OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY", ""))
 )
