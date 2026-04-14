@@ -7,9 +7,13 @@ pip install streamlit anthropic openai pillow
 import io, base64, json, re, os
 import streamlit as st
 from PIL import Image
+import anthropic
 import openai
 
 # ── クライアント初期化 ────────────────────────────────────
+anthropic_client = anthropic.Anthropic(
+    api_key=os.environ.get("ANTHROPIC_API_KEY", st.secrets.get("ANTHROPIC_API_KEY", ""))
+)
 openai_client = openai.OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY", ""))
 )
@@ -46,15 +50,7 @@ Respond ONLY in valid JSON (no markdown fences):
 }"""
 
 # ── Helpers ───────────────────────────────────────────────
-def handle_openai_error(e: Exception) -> str:
-    msg = str(e)
-    if "insufficient_quota" in msg or "quota" in msg.lower():
-        return "現在サービスの利用上限に達しています。しばらく経ってから再度お試しください。"
-    if "rate_limit" in msg:
-        return "アクセスが集中しています。少し待ってから再度お試しください。"
-    if "invalid_api_key" in msg:
-        return "サービスの設定に問題があります。管理者にお問い合わせください。"
-    return f"エラーが発生しました。再度お試しください。（{msg[:80]}）"
+def parse_json(text: str) -> dict:
     cleaned = re.sub(r"```json|```", "", text).strip()
     return json.loads(cleaned)
 
@@ -156,11 +152,7 @@ if not st.session_state.history:
         if img.mode in ("RGBA", "P", "LA"):
             img = img.convert("RGB")
         with st.spinner("デザイン画を解析中..."):
-            try:
-                result = analyze_image(img)
-            except Exception as e:
-                st.error(handle_openai_error(e))
-                st.stop()
+            result = analyze_image(img)
 
         if not result.get("isDesign"):
             st.error(f"デザイン画として認識できませんでした。\n理由：{result.get('reason','')}")
@@ -182,12 +174,7 @@ if st.session_state.history:
     labels = ["Original"] + [f"Rev.{i}" for i in range(1, len(history))]
     # 履歴セレクター（2件以上ある時だけ表示）
     if len(history) > 1:
-        idx = st.select_slider(
-            "バージョン",
-            options=range(len(history)),
-            format_func=lambda i: labels[i],
-            value=len(history) - 1
-        )
+        idx = st.select_slider("バージョン", options=range(len(history)), format_func=lambda i: labels[i])
     else:
         idx = 0
     active = history[idx]
